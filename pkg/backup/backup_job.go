@@ -51,6 +51,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/sql/sem/tree"
 	"github.com/cockroachdb/cockroach/pkg/sql/sessiondata"
 	"github.com/cockroachdb/cockroach/pkg/sql/stats"
+	"github.com/cockroachdb/cockroach/pkg/util/besteffort"
 	bulkutil "github.com/cockroachdb/cockroach/pkg/util/bulk"
 	"github.com/cockroachdb/cockroach/pkg/util/ctxgroup"
 	"github.com/cockroachdb/cockroach/pkg/util/errorutil/unimplemented"
@@ -1960,6 +1961,20 @@ func (b *backupResumer) OnFailOrCancel(
 	details := b.job.Details().(jobspb.BackupDetails)
 
 	b.deleteCheckpoint(ctx, cfg, p.User())
+
+	// For compaction jobs, clean up the BACKUP-LOCK file from the backup
+	// destination to unblock subsequent compaction attempts that may target
+	// the same location. A failed compaction does not produce a valid backup at
+	// the destination, so the lock serves no purpose and only blocks future
+	// compactions.
+	if details.Compact && details.URI != "" {
+		besteffort.Warning(ctx, "delete-compaction-backup-lock", func(ctx context.Context) error {
+			return backupinfo.DeleteBackupLock(
+				ctx, cfg, details.URI, b.job.ID(), p.User(),
+			)
+		})
+	}
+
 	if err := cfg.InternalDB.Txn(ctx, func(ctx context.Context, txn isql.Txn) error {
 		pts := cfg.ProtectedTimestampProvider.WithTxn(txn)
 		return releaseProtectedTimestamp(ctx, pts, details.ProtectedTimestampRecord)
