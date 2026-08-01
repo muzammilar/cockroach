@@ -47,17 +47,24 @@ let $backup_path
 SHOW BACKUPS IN 'nodelocal://1/test-root/';
 ----
 
-# 2. Pause compaction after the BACKUP-LOCK is written so we can cancel it.
+# 2. Set a pausepoint so the compaction pauses right after it writes the
+# BACKUP-LOCK, letting us cancel it while the lock is still present. The
+# crdb_internal.backup_compaction builtin starts the job asynchronously, so the
+# call returns immediately with the job ID; we wait for the job to pause
+# separately rather than expecting a synchronous pausepoint error.
 exec-sql
 SET CLUSTER SETTING jobs.debug.pausepoints = 'backup_compaction.after.details_has_checkpoint';
 ----
 
-compact expect-pausepoint start=start end=end tag=comp1
+compact start=start end=end tag=comp1
 SELECT crdb_internal.backup_compaction(0, 'BACKUP INTO LATEST IN ''nodelocal://1/test-root/''', '$backup_path', start, end);
 ----
-job paused at pausepoint
 
-# 3. Cancel the compaction job to trigger OnFailOrCancel cleanup.
+job tag=comp1 wait-for-state=paused
+----
+
+# 3. Cancel the paused compaction to trigger OnFailOrCancel, which cleans up the
+# BACKUP-LOCK file.
 job cancel=comp1
 ----
 
