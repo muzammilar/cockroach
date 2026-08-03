@@ -46,6 +46,7 @@ import (
 	"github.com/cockroachdb/cockroach/pkg/testutils/skip"
 	"github.com/cockroachdb/cockroach/pkg/testutils/sqlutils"
 	"github.com/cockroachdb/cockroach/pkg/util/admission"
+	"github.com/cockroachdb/cockroach/pkg/util/besteffort"
 	"github.com/cockroachdb/cockroach/pkg/util/ctxgroup"
 	"github.com/cockroachdb/datadriven"
 	"github.com/cockroachdb/errors"
@@ -514,6 +515,17 @@ func runTestDataDriven(t *testing.T, testFilePathFromWorkspace string) {
 	var lastCreatedCluster string
 	ds := newDatadrivenTestState()
 	defer ds.cleanup(ctx, t)
+
+	// The compaction-failed-lock-cleanup test cancels a compaction after its
+	// BACKUP-LOCK is written and then relies on OnFailOrCancel deleting that
+	// lock so a subsequent compaction can proceed. That deletion is a
+	// besteffort operation, which is randomly skipped in test builds; forbid
+	// skipping it here so the cleanup runs deterministically. Scoped to this
+	// file so the random-skip coverage is preserved for every other test.
+	if strings.Contains(path, "compaction-failed-lock-cleanup") {
+		defer besteffort.TestForbidSkip(compactionBackupLockCleanupOp)()
+	}
+
 	datadriven.RunTest(t, path, func(t *testing.T, d *datadriven.TestData) string {
 		execWithTagAndPausePoint := func(jobType jobspb.Type) string {
 			ds.noticeBuffer = nil

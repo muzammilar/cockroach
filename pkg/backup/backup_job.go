@@ -1947,6 +1947,12 @@ func (b *backupResumer) processScheduledBackupCompletion(
 	return nil
 }
 
+// compactionBackupLockCleanupOp is the besteffort operation name used when
+// removing the BACKUP-LOCK file left behind by a failed compaction job. Tests
+// reference it via besteffort.TestForbidSkip to force the cleanup to run
+// deterministically instead of being randomly skipped in test builds.
+const compactionBackupLockCleanupOp = "delete-compaction-backup-lock"
+
 // OnFailOrCancel is part of the jobs.Resumer interface.
 func (b *backupResumer) OnFailOrCancel(
 	ctx context.Context, execCtx interface{}, jobErr error,
@@ -1968,7 +1974,7 @@ func (b *backupResumer) OnFailOrCancel(
 	// the destination, so the lock serves no purpose and only blocks future
 	// compactions.
 	if details.Compact && details.URI != "" {
-		besteffort.Warning(ctx, "delete-compaction-backup-lock", func(ctx context.Context) error {
+		besteffort.Warning(ctx, compactionBackupLockCleanupOp, func(ctx context.Context) error {
 			return backupinfo.DeleteBackupLock(
 				ctx, cfg, details.URI, b.job.ID(), p.User(),
 			)
