@@ -486,6 +486,11 @@ func (d *datadrivenTestState) getSQLDBForVC(
 //   - "sleep ms=TIME"
 //     Sleep for TIME milliseconds.
 //
+//   - "besteffort-forbid-skip op=OP"
+//     Forbids the besteffort operation named OP from being randomly skipped in
+//     test builds for the remainder of the test, so its side effects run
+//     deterministically. See pkg/util/besteffort.
+//
 //lint:ignore U1000 unused
 func runTestDataDriven(t *testing.T, testFilePathFromWorkspace string) {
 	// TODO(at): data driven tests will need some tweaks to work with OR metamorphic, which will
@@ -516,15 +521,14 @@ func runTestDataDriven(t *testing.T, testFilePathFromWorkspace string) {
 	ds := newDatadrivenTestState()
 	defer ds.cleanup(ctx, t)
 
-	// The compaction-failed-lock-cleanup test cancels a compaction after its
-	// BACKUP-LOCK is written and then relies on OnFailOrCancel deleting that
-	// lock so a subsequent compaction can proceed. That deletion is a
-	// besteffort operation, which is randomly skipped in test builds; forbid
-	// skipping it here so the cleanup runs deterministically. Scoped to this
-	// file so the random-skip coverage is preserved for every other test.
-	if strings.Contains(path, "compaction-failed-lock-cleanup") {
-		defer besteffort.TestForbidSkip(compactionBackupLockCleanupOp)()
-	}
+	// The "besteffort-forbid-skip" command registers cleanups that must remain
+	// in effect for the remainder of the test; run them once it finishes.
+	var besteffortCleanups []func()
+	defer func() {
+		for _, cleanup := range besteffortCleanups {
+			cleanup()
+		}
+	}()
 
 	datadriven.RunTest(t, path, func(t *testing.T, d *datadriven.TestData) string {
 		execWithTagAndPausePoint := func(jobType jobspb.Type) string {
@@ -582,6 +586,12 @@ func runTestDataDriven(t *testing.T, testFilePathFromWorkspace string) {
 
 		case "skip-under-duress":
 			skip.UnderDuress(t)
+			return ""
+
+		case "besteffort-forbid-skip":
+			var op string
+			d.ScanArgs(t, "op", &op)
+			besteffortCleanups = append(besteffortCleanups, besteffort.TestForbidSkip(op))
 			return ""
 
 		case "reset":

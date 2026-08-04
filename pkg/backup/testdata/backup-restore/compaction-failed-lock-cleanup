@@ -8,6 +8,13 @@ reset test-nodelocal
 new-cluster name=s1 disable-tenant
 ----
 
+# The BACKUP-LOCK cleanup in OnFailOrCancel is a besteffort operation, which is
+# randomly skipped in test builds. Forbid skipping it so the cancelled
+# compaction below deterministically removes its lock and the subsequent
+# compaction can proceed.
+besteffort-forbid-skip op=delete-compaction-backup-lock
+----
+
 # 1. Setup: create a table and take a full backup followed by two incrementals,
 # saving timestamps to use as compaction start/end boundaries.
 exec-sql
