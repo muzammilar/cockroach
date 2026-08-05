@@ -338,13 +338,20 @@ jobs:
       #
       # roachdev is an internal release in another org, which a public repo
       # cannot install via `uses: cockroachlabs/roachdev@main` (GitHub blocks
-      # internal-repo actions from public repos). The local composite action
+      # internal-repo actions from public repos). This composite action
       # downloads the released binary directly, using the cross-org PAT that
       # already checks out the private code repo. On the personal-fork
       # API-key path no token is passed, so roachdev is skipped — that path
       # runs Claude directly and never posts to a public repo.
+      #
+      # This is referenced by full repo path @ref rather than the local `./`
+      # form on purpose: the Checkout step above replaced the workspace with
+      # CODE_REPO, so `./.github/actions/...` (resolved against the workspace)
+      # would not be found. A remote ref is fetched independently of the
+      # workspace. Tracks master so same-repo action edits take effect without
+      # a version bump.
       - name: Set up roachdev and Claude Code
-        uses: ./.github/actions/setup-roachdev
+        uses: cockroachdb/cockroach/.github/actions/setup-roachdev@master
         with:
           # Pinned: claude-code-action@v1 would otherwise install Claude Code
           # 1.0.127 (Sep 2025), which predates --effort and the Sonnet 5 /
