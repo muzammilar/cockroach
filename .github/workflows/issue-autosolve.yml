@@ -80,7 +80,7 @@ jobs:
         uses: cockroachdb/claude-code-action@fa7e2f0a29a126f0b81cdcf360561b36e44cf608 # v1.0.180
         env:
           ANTHROPIC_VERTEX_PROJECT_ID: vertex-model-runners
-          CLOUD_ML_REGION: us-east5
+          CLOUD_ML_REGION: global
           # Pass user-controlled content via env vars to prevent prompt injection
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.issue.body }}
@@ -176,7 +176,7 @@ jobs:
         env:
           CLAUDE_CODE_USE_VERTEX: "1"
           ANTHROPIC_VERTEX_PROJECT_ID: vertex-model-runners
-          CLOUD_ML_REGION: us-east5
+          CLOUD_ML_REGION: global
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.issue.body }}
           AUTOMATION: "1"
